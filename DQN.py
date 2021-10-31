@@ -10,6 +10,9 @@ class TrainModel(object):
     def predict(state_elements_array):
         return self.model.predict(state_elements_array)
 
+    def update(self, states_batch, action_batch, target_batch):
+        return
+
 class DQN(object):
     def __init__(self,
                 valid_actions):
@@ -23,9 +26,15 @@ class DQN(object):
                         epsilon_decy_steps,
                         q_estimator,
                         update_target_estimator_every,
-                        num_episode
+                        num_episode,
+                        replay_memory_size,
+                        batch_size,
+                        discount_factor
                         ):
         
+        transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
+        replay_memory = []
+
         total_t = 0
         epsilons = np.linespace(epsilon_start, epsilon_end, epsilon_decy_steps)
 
@@ -44,8 +53,26 @@ class DQN(object):
                 action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
 
                 next_state, reward, done = env.step(self.valid_actions[action])
-                # state[:,:,1:] means the 2nd~last elements in 3rd dimension
+                
+                if len(replay_memory) == replay_memory_size:
+                    replay_memory.pop(0)
 
+                replay_memory.append(transition(state, action, reward, next_state, done))
+
+                samples = random.sample(replay_memory, batch_size)
+
+                states_batch, action_batch, reward_batch, next_states_batch, done_batch = map(np.array, zip(*samples))
+
+                q_values_next = self.train_model.predict(next_states_batch)
+
+                targets_batch = reward_batch + np.invert(done_batch).astype(np.float32)*discount_factor*np.amax(q_values_next, axis=1)
+
+                loss = self.train_model.update(states_batch, action_batch, targets_batch)
+
+                if done:
+                    break
+
+                state = next_state
                 total_t += 1
 
 
